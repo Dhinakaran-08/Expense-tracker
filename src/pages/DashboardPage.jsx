@@ -47,7 +47,7 @@ export default function DashboardPage() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SpendingChart categoryBreakdown={categoryBreakdown} />
+        <SpendingChart categoryBreakdown={categoryBreakdown} transactions={transactions} />
         <TrendChart dailyTrend={dailyTrend} />
       </div>
 

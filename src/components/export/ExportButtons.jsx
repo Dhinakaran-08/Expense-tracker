@@ -20,7 +20,7 @@ export default function ExportButtons({ transactions = [], profile = {} }) {
     doc.setFontSize(10);
     doc.setTextColor(100, 116, 139);
     doc.text(`Generated for: ${userName}`, 14, 28);
-    doc.text(`Report Date: ${format(new Date(), 'dd MMMM yyyy, HH:mm')}`, 14, 34);
+    doc.text(`Report Date: ${format(new Date(), 'dd MMMM yyyy')}`, 14, 34);
 
     // Summary calculation
     const totalIncome = transactions

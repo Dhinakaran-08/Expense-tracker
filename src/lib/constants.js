@@ -1,9 +1,15 @@
-export const INCOME_CATEGORIES = ['Monthly Salary', 'Pocket Money', 'Others'];
+export const INCOME_CATEGORIES = [
+  'Monthly Salary',
+  'Pocket Money',
+  'Receive Lend',
+  'Others',
+];
 
 export const EXPENSE_CATEGORIES = [
   'Food',
   'Grocery',
-  'Transport',
+  'Rent',
+  'Lend',
   'Shopping',
   'Bills',
   'Entertainment',
@@ -17,9 +23,11 @@ export const ALL_CATEGORIES = [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES];
 export const CATEGORY_ICONS = {
   'Monthly Salary': 'Banknote',
   'Pocket Money': 'Wallet',
+  'Receive Lend': 'HandCoins',
   Food: 'UtensilsCrossed',
   Grocery: 'ShoppingBasket',
-  Transport: 'Car',
+  Rent: 'Home',
+  Lend: 'HandCoins',
   Shopping: 'ShoppingBag',
   Bills: 'Receipt',
   Entertainment: 'Gamepad2',
@@ -31,9 +39,11 @@ export const CATEGORY_ICONS = {
 export const CATEGORY_COLORS = {
   'Monthly Salary': '#148256',
   'Pocket Money': '#4f8a3f',
+  'Receive Lend': '#059669',
   Food: '#c15a3a',
   Grocery: '#b9852e',
-  Transport: '#3d6ea6',
+  Rent: '#0284c7',
+  Lend: '#e11d48',
   Shopping: '#8654a3',
   Bills: '#a17a3e',
   Entertainment: '#b04a70',

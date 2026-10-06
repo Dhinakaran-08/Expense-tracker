@@ -14,27 +14,35 @@ import {
 export function useAnalytics(transactions = []) {
   const now = new Date();
 
-  // Current month transactions
+  // Exclude lend / receive lend transactions from all analytics and trends
+  const analyticsTransactions = useMemo(() => {
+    return transactions.filter((t) => {
+      const cat = t.category?.toLowerCase();
+      return cat !== 'lend' && cat !== 'receive lend';
+    });
+  }, [transactions]);
+
+  // Current month transactions (excluding lend)
   const currentMonthTransactions = useMemo(() => {
     const start = startOfMonth(now);
     const end = endOfMonth(now);
-    return transactions.filter((t) => {
+    return analyticsTransactions.filter((t) => {
       const d = parseISO(t.date);
       return isWithinInterval(d, { start, end });
     });
-  }, [transactions]);
+  }, [analyticsTransactions]);
 
-  // Current week transactions
+  // Current week transactions (excluding lend)
   const currentWeekTransactions = useMemo(() => {
     const start = startOfWeek(now, { weekStartsOn: 1 });
     const end = endOfWeek(now, { weekStartsOn: 1 });
-    return transactions.filter((t) => {
+    return analyticsTransactions.filter((t) => {
       const d = parseISO(t.date);
       return isWithinInterval(d, { start, end });
     });
-  }, [transactions]);
+  }, [analyticsTransactions]);
 
-  // Weekly chart data (Mon-Sun)
+  // Weekly chart data (Mon-Sun) (excluding lend)
   const weeklyData = useMemo(() => {
     const start = startOfWeek(now, { weekStartsOn: 1 });
     const end = endOfWeek(now, { weekStartsOn: 1 });
@@ -42,7 +50,7 @@ export function useAnalytics(transactions = []) {
 
     return days.map((day) => {
       const dateStr = format(day, 'yyyy-MM-dd');
-      const dayTransactions = transactions.filter((t) => t.date === dateStr);
+      const dayTransactions = analyticsTransactions.filter((t) => t.date === dateStr);
       const income = dayTransactions
         .filter((t) => t.type === 'income')
         .reduce((s, t) => s + Number(t.amount), 0);
@@ -57,9 +65,9 @@ export function useAnalytics(transactions = []) {
         expense,
       };
     });
-  }, [transactions]);
+  }, [analyticsTransactions]);
 
-  // Monthly chart data (last 6 months)
+  // Monthly chart data (last 6 months) (excluding lend)
   const monthlyData = useMemo(() => {
     const months = [];
     for (let i = 5; i >= 0; i--) {
@@ -67,7 +75,7 @@ export function useAnalytics(transactions = []) {
       const start = startOfMonth(monthDate);
       const end = endOfMonth(monthDate);
 
-      const monthTransactions = transactions.filter((t) => {
+      const monthTransactions = analyticsTransactions.filter((t) => {
         const d = parseISO(t.date);
         return isWithinInterval(d, { start, end });
       });
@@ -88,9 +96,9 @@ export function useAnalytics(transactions = []) {
       });
     }
     return months;
-  }, [transactions]);
+  }, [analyticsTransactions]);
 
-  // Category breakdown (expenses only)
+  // Category breakdown (expenses only, excluding lend)
   const categoryBreakdown = useMemo(() => {
     const expenses = currentMonthTransactions.filter(
       (t) => t.type === 'expense'
@@ -117,15 +125,31 @@ export function useAnalytics(transactions = []) {
       .sort((a, b) => b.amount - a.amount);
   }, [currentMonthTransactions]);
 
-  // Summary stats
+  // Summary stats (excluding rent and lend from daily/projected calculations)
   const summary = useMemo(() => {
     const monthExpenses = currentMonthTransactions.filter(
       (t) => t.type === 'expense'
     );
+    const nonRentMonthExpenses = monthExpenses.filter(
+      (t) => t.category?.toLowerCase() !== 'rent'
+    );
+    const rentMonthExpenses = monthExpenses.filter(
+      (t) => t.category?.toLowerCase() === 'rent'
+    );
+
     const totalMonthExpense = monthExpenses.reduce(
       (s, t) => s + Number(t.amount),
       0
     );
+    const nonRentMonthExpense = nonRentMonthExpenses.reduce(
+      (s, t) => s + Number(t.amount),
+      0
+    );
+    const rentMonthExpense = rentMonthExpenses.reduce(
+      (s, t) => s + Number(t.amount),
+      0
+    );
+
     const totalMonthIncome = currentMonthTransactions
       .filter((t) => t.type === 'income')
       .reduce((s, t) => s + Number(t.amount), 0);
@@ -133,11 +157,19 @@ export function useAnalytics(transactions = []) {
     const daysInMonth = endOfMonth(now).getDate();
     const currentDay = now.getDate();
 
+    // Highest category excluding Rent (and Lend is already excluded)
+    const nonRentBreakdown = categoryBreakdown.filter(
+      (c) => c.category?.toLowerCase() !== 'rent'
+    );
+
+    const projectedNonRent =
+      currentDay > 0 ? (nonRentMonthExpense / currentDay) * daysInMonth : 0;
+
     return {
       avgDailySpend:
-        currentDay > 0 ? totalMonthExpense / currentDay : 0,
-      highestCategory: categoryBreakdown[0]?.category || 'N/A',
-      highestCategoryAmount: categoryBreakdown[0]?.amount || 0,
+        currentDay > 0 ? nonRentMonthExpense / currentDay : 0,
+      highestCategory: nonRentBreakdown[0]?.category || 'N/A',
+      highestCategoryAmount: nonRentBreakdown[0]?.amount || 0,
       savingsRate:
         totalMonthIncome > 0
           ? (
@@ -148,14 +180,13 @@ export function useAnalytics(transactions = []) {
           : 0,
       totalMonthIncome,
       totalMonthExpense,
-      projectedMonthlyExpense:
-        currentDay > 0
-          ? (totalMonthExpense / currentDay) * daysInMonth
-          : 0,
+      nonRentMonthExpense,
+      rentMonthExpense,
+      projectedMonthlyExpense: projectedNonRent + rentMonthExpense,
     };
   }, [currentMonthTransactions, categoryBreakdown]);
 
-  // Daily spending trend for current month
+  // Daily spending trend for current month (excluding rent and lend)
   const dailyTrend = useMemo(() => {
     const start = startOfMonth(now);
     const end = now;
@@ -163,8 +194,13 @@ export function useAnalytics(transactions = []) {
 
     return days.map((day) => {
       const dateStr = format(day, 'yyyy-MM-dd');
-      const expense = transactions
-        .filter((t) => t.date === dateStr && t.type === 'expense')
+      const expense = analyticsTransactions
+        .filter(
+          (t) =>
+            t.date === dateStr &&
+            t.type === 'expense' &&
+            t.category?.toLowerCase() !== 'rent'
+        )
         .reduce((s, t) => s + Number(t.amount), 0);
 
       return {
@@ -172,7 +208,7 @@ export function useAnalytics(transactions = []) {
         expense,
       };
     });
-  }, [transactions]);
+  }, [analyticsTransactions]);
 
   return {
     currentMonthTransactions,

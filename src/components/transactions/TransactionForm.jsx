@@ -11,7 +11,6 @@ export default function TransactionForm({ isOpen, onClose, onSubmit, editData })
     amount: '',
     description: '',
     date: new Date().toISOString().split('T')[0],
-    time: new Date().toTimeString().slice(0, 5),
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -24,7 +23,6 @@ export default function TransactionForm({ isOpen, onClose, onSubmit, editData })
         amount: String(editData.amount),
         description: editData.description || '',
         date: editData.date,
-        time: editData.time || new Date().toTimeString().slice(0, 5),
       });
     } else {
       setFormData({
@@ -33,7 +31,6 @@ export default function TransactionForm({ isOpen, onClose, onSubmit, editData })
         amount: '',
         description: '',
         date: new Date().toISOString().split('T')[0],
-        time: new Date().toTimeString().slice(0, 5),
       });
     }
   }, [editData, isOpen]);
@@ -62,7 +59,6 @@ export default function TransactionForm({ isOpen, onClose, onSubmit, editData })
         amount: Number(formData.amount),
         description: formData.description,
         date: formData.date,
-        time: formData.time,
       });
       onClose();
     } catch (err) {
@@ -124,8 +120,7 @@ export default function TransactionForm({ isOpen, onClose, onSubmit, editData })
           </button>
         </div>
 
-        {/* Category chips — single source of truth, no redundant dropdown.
-            4 columns keeps expense's 8 categories to just 2 rows. */}
+        {/* Category chips */}
         <div>
           <label
             className="text-[12px] font-medium block mb-1"
@@ -154,9 +149,9 @@ export default function TransactionForm({ isOpen, onClose, onSubmit, editData })
           </div>
         </div>
 
-        {/* Amount, date, and time all in one row */}
+        {/* Amount and date */}
         <div className="flex gap-2">
-          <div className="flex-[1.2]">
+          <div className="flex-1">
             <Input
               label="Amount (₹)"
               type="number"
@@ -174,15 +169,6 @@ export default function TransactionForm({ isOpen, onClose, onSubmit, editData })
               type="date"
               value={formData.date}
               onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              required
-            />
-          </div>
-          <div className="flex-1">
-            <Input
-              label="Time"
-              type="time"
-              value={formData.time}
-              onChange={(e) => setFormData({ ...formData, time: e.target.value })}
               required
             />
           </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { startOfMonth, endOfMonth, parseISO, isWithinInterval } from 'date-fns';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { INITIAL_DEMO_TRANSACTIONS } from '../lib/constants';
@@ -6,6 +7,19 @@ import { INITIAL_DEMO_TRANSACTIONS } from '../lib/constants';
 // v2: bumped so any old cached/sample entries from earlier sessions
 // are abandoned automatically — new users always start empty.
 const STORAGE_KEY = 'expense_iq_transactions_v2';
+
+const sortByDate = (list) => {
+  return [...list].sort((a, b) => {
+    const dateA = new Date(a.date || 0).getTime();
+    const dateB = new Date(b.date || 0).getTime();
+    if (dateB !== dateA) {
+      return dateB - dateA;
+    }
+    const createdA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const createdB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return createdB - createdA;
+  });
+};
 
 export function useTransactions() {
   const { user, isDemo } = useAuth();
@@ -28,13 +42,14 @@ export function useTransactions() {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         try {
-          setTransactions(JSON.parse(stored));
+          const parsed = JSON.parse(stored);
+          setTransactions(sortByDate(parsed));
         } catch {
-          setTransactions(INITIAL_DEMO_TRANSACTIONS);
+          setTransactions(sortByDate(INITIAL_DEMO_TRANSACTIONS));
           localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_DEMO_TRANSACTIONS));
         }
       } else {
-        setTransactions(INITIAL_DEMO_TRANSACTIONS);
+        setTransactions(sortByDate(INITIAL_DEMO_TRANSACTIONS));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_DEMO_TRANSACTIONS));
       }
       setLoading(false);
@@ -51,11 +66,12 @@ export function useTransactions() {
         .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
-      setTransactions(data || []);
+      setTransactions(sortByDate(data || []));
     } catch (err) {
       console.warn('Supabase transaction fetch fallback to local:', err);
       const stored = localStorage.getItem(STORAGE_KEY);
-      setTransactions(stored ? JSON.parse(stored) : INITIAL_DEMO_TRANSACTIONS);
+      const fallback = stored ? JSON.parse(stored) : INITIAL_DEMO_TRANSACTIONS;
+      setTransactions(sortByDate(fallback));
       setError(err.message);
     } finally {
       setLoading(false);
@@ -67,8 +83,9 @@ export function useTransactions() {
   }, [fetchTransactions]);
 
   const saveToLocal = (newTxns) => {
-    setTransactions(newTxns);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newTxns));
+    const sorted = sortByDate(newTxns);
+    setTransactions(sorted);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
   };
 
   const addTransaction = async (transaction) => {
@@ -80,7 +97,7 @@ export function useTransactions() {
     };
 
     if (isDemo || !isSupabaseConfigured) {
-      const updated = [newTx, ...transactions];
+      const updated = sortByDate([newTx, ...transactions]);
       saveToLocal(updated);
       return newTx;
     }
@@ -92,7 +109,7 @@ export function useTransactions() {
         .select()
         .single();
       if (error) throw error;
-      setTransactions((prev) => [data, ...prev]);
+      setTransactions((prev) => sortByDate([data, ...prev]));
       return data;
     } catch (err) {
       console.error('Failed to save transaction to Supabase:', err.message);
@@ -119,7 +136,7 @@ export function useTransactions() {
         .select()
         .single();
       if (error) throw error;
-      setTransactions((prev) => prev.map((t) => (t.id === id ? data : t)));
+      setTransactions((prev) => sortByDate(prev.map((t) => (t.id === id ? data : t))));
       return data;
     } catch (err) {
       console.error('Failed to update transaction in Supabase:', err.message);
@@ -175,21 +192,83 @@ export function useTransactions() {
         filtered = filtered.filter((t) => t.date <= endDate);
       }
 
-      return filtered;
+      return sortByDate(filtered);
     },
     [transactions]
   );
 
+  const now = new Date();
+  const start = startOfMonth(now);
+  const end = endOfMonth(now);
+
+  const monthTxns = transactions.filter((t) => {
+    try {
+      const d = parseISO(t.date);
+      return isWithinInterval(d, { start, end });
+    } catch {
+      return false;
+    }
+  });
+
+  const isReceiveLend = (t) => t.category?.toLowerCase() === 'receive lend';
+
+  // Total cash flow in wallet (all money in minus all money out)
+  const totalAllIncome = transactions
+    .filter((t) => t.type === 'income')
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalAllExpense = transactions
+    .filter((t) => t.type === 'expense')
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalBalance = totalAllIncome - totalAllExpense;
+
+  // True earned income (excluding repayments of lent money)
+  const totalEarnedIncome = transactions
+    .filter((t) => t.type === 'income' && !isReceiveLend(t))
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  // Total repayments received (offsets total expenses)
+  const totalLoanRepaid = transactions
+    .filter((t) => t.type === 'income' && isReceiveLend(t))
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalNetExpense = Math.max(0, totalAllExpense - totalLoanRepaid);
+
+  // Current Month:
+  // 1. Monthly earned income (excluding 'Receive Lend')
+  const monthEarnedIncome = monthTxns
+    .filter((t) => t.type === 'income' && !isReceiveLend(t))
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  // 2. Monthly gross expenses (includes any 'Lend' expenses)
+  const monthGrossExpense = monthTxns
+    .filter((t) => t.type === 'expense')
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  // 3. Monthly 'Receive Lend' repayments received (offsets monthly expenses)
+  const monthLoanRepaid = monthTxns
+    .filter((t) => t.type === 'income' && isReceiveLend(t))
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  // 4. Net Monthly Expense (Gross Expense minus repayments received)
+  const monthNetExpense = Math.max(0, monthGrossExpense - monthLoanRepaid);
+
+  // 5. Month net wallet flow (total money in minus total money out this month)
+  const monthGrossIncome = monthTxns
+    .filter((t) => t.type === 'income')
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const monthBalance = monthGrossIncome - monthGrossExpense;
+
   const totals = {
-    income: transactions
-      .filter((t) => t.type === 'income')
-      .reduce((sum, t) => sum + Number(t.amount), 0),
-    expense: transactions
-      .filter((t) => t.type === 'expense')
-      .reduce((sum, t) => sum + Number(t.amount), 0),
+    income: totalEarnedIncome,
+    expense: totalNetExpense,
+    balance: totalBalance,
+    savings: totalBalance,
+    totalIncome: totalEarnedIncome,
+    totalExpense: totalNetExpense,
+    totalBalance,
+    monthIncome: monthEarnedIncome,
+    monthExpense: monthNetExpense,
+    monthBalance,
   };
-  totals.balance = totals.income - totals.expense;
-  totals.savings = totals.balance;
 
   const clearAllData = async () => {
     if (isDemo || !isSupabaseConfigured) {

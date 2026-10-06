@@ -6,7 +6,7 @@ export default function AnalyticsSummary({ summary }) {
     {
       label: 'Avg Daily Spend',
       value: `${CURRENCY}${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(summary.avgDailySpend || 0)}`,
-      sub: 'Per day this month',
+      sub: 'Per day this month (excl. rent)',
       icon: Calendar,
       color: 'var(--color-primary-600)',
       bg: 'var(--color-primary-50)',
@@ -15,7 +15,7 @@ export default function AnalyticsSummary({ summary }) {
       label: 'Highest Category',
       value: summary.highestCategory || 'N/A',
       sub: summary.highestCategoryAmount > 0
-        ? `${CURRENCY}${new Intl.NumberFormat('en-IN').format(summary.highestCategoryAmount)}`
+        ? `${CURRENCY}${new Intl.NumberFormat('en-IN').format(summary.highestCategoryAmount)} (excl. rent)`
         : 'No data',
       icon: TrendingDown,
       color: 'var(--color-danger-500)',
@@ -32,7 +32,7 @@ export default function AnalyticsSummary({ summary }) {
     {
       label: 'Projected Expense',
       value: `${CURRENCY}${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(summary.projectedMonthlyExpense || 0)}`,
-      sub: 'By month end at current pace',
+      sub: 'By month end (excl. daily rent scaling)',
       icon: DollarSign,
       color: 'var(--color-accent-amber)',
       bg: 'var(--color-accent-amber-bg)',

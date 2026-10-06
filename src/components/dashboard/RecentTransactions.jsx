@@ -1,7 +1,8 @@
 import { format, parseISO } from 'date-fns';
 import {
-  Banknote, Wallet, UtensilsCrossed, ShoppingBasket, Car,
+  Banknote, Wallet, UtensilsCrossed, ShoppingBasket, Home,
   ShoppingBag, Receipt, Gamepad2, HeartPulse, Plane, MoreHorizontal,
+  HandCoins,
   ArrowUpRight, ArrowDownRight,
 } from 'lucide-react';
 import { CURRENCY, CATEGORY_COLORS } from '../../lib/constants';
@@ -9,9 +10,11 @@ import { CURRENCY, CATEGORY_COLORS } from '../../lib/constants';
 const iconMap = {
   'Monthly Salary': Banknote,
   'Pocket Money': Wallet,
+  'Receive Lend': HandCoins,
   Food: UtensilsCrossed,
   Grocery: ShoppingBasket,
-  Transport: Car,
+  Rent: Home,
+  Lend: HandCoins,
   Shopping: ShoppingBag,
   Bills: Receipt,
   Entertainment: Gamepad2,

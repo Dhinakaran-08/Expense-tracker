@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router';
+import { Link, NavLink, useLocation } from 'react-router';
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -38,7 +38,12 @@ export default function Sidebar({ isOpen, onClose }) {
           className="flex items-center justify-between px-5"
           style={{ height: '64px', borderBottom: '1px solid var(--border-color)' }}
         >
-          <div className="flex items-center gap-2.5">
+          <Link
+            to="/"
+            onClick={onClose}
+            className="flex items-center gap-2.5 transition-opacity duration-150 hover:opacity-85 cursor-pointer"
+            title="Go to Dashboard"
+          >
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center"
               style={{ background: 'var(--color-primary-600)' }}
@@ -51,7 +56,7 @@ export default function Sidebar({ isOpen, onClose }) {
             >
               ExpenseIQ
             </span>
-          </div>
+          </Link>
           <button
             onClick={onClose}
             className="p-1.5 rounded-md app-mobile-only"

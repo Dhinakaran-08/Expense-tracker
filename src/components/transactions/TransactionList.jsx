@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import {
   Edit3, Trash2, ChevronLeft, ChevronRight,
-  Banknote, Wallet, UtensilsCrossed, ShoppingBasket, Car,
+  Banknote, Wallet, UtensilsCrossed, ShoppingBasket, Home,
   ShoppingBag, Receipt, Gamepad2, HeartPulse, Plane, MoreHorizontal,
+  HandCoins,
 } from 'lucide-react';
 import { CURRENCY, CATEGORY_COLORS } from '../../lib/constants';
 import Badge from '../ui/Badge';
@@ -12,9 +13,11 @@ import Button from '../ui/Button';
 const iconMap = {
   'Monthly Salary': Banknote,
   'Pocket Money': Wallet,
+  'Receive Lend': HandCoins,
   Food: UtensilsCrossed,
   Grocery: ShoppingBasket,
-  Transport: Car,
+  Rent: Home,
+  Lend: HandCoins,
   Shopping: ShoppingBag,
   Bills: Receipt,
   Entertainment: Gamepad2,
@@ -33,10 +36,15 @@ export default function TransactionList({
   const [page, setPage] = useState(0);
   const [deleteId, setDeleteId] = useState(null);
 
-  const totalPages = Math.ceil(transactions.length / PAGE_SIZE);
+  useEffect(() => {
+    setPage(0);
+  }, [transactions.length]);
+
+  const totalPages = Math.ceil(transactions.length / PAGE_SIZE) || 1;
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
   const paged = transactions.slice(
-    page * PAGE_SIZE,
-    (page + 1) * PAGE_SIZE
+    safePage * PAGE_SIZE,
+    (safePage + 1) * PAGE_SIZE
   );
 
   const handleDelete = async (id) => {
@@ -259,50 +267,60 @@ export default function TransactionList({
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div
-          className="flex items-center justify-between px-5 py-3"
-          style={{ borderTop: '1px solid var(--border-color)' }}
-        >
-          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-            Showing {page * PAGE_SIZE + 1}–
-            {Math.min((page + 1) * PAGE_SIZE, transactions.length)} of{' '}
-            {transactions.length}
-          </p>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={ChevronLeft}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-            />
-            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-              const pageNum = i;
-              return (
+      {totalPages > 1 && (() => {
+        const maxButtons = 5;
+        let startPage = Math.max(0, safePage - Math.floor(maxButtons / 2));
+        let endPage = Math.min(totalPages, startPage + maxButtons);
+        if (endPage - startPage < maxButtons) {
+          startPage = Math.max(0, endPage - maxButtons);
+        }
+        const pageNumbers = [];
+        for (let i = startPage; i < endPage; i++) {
+          pageNumbers.push(i);
+        }
+
+        return (
+          <div
+            className="flex items-center justify-between px-5 py-3"
+            style={{ borderTop: '1px solid var(--border-color)' }}
+          >
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+              Showing {safePage * PAGE_SIZE + 1}–
+              {Math.min((safePage + 1) * PAGE_SIZE, transactions.length)} of{' '}
+              {transactions.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={ChevronLeft}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+              />
+              {pageNumbers.map((pageNum) => (
                 <button
                   key={pageNum}
                   onClick={() => setPage(pageNum)}
                   className="w-8 h-8 rounded-lg text-xs font-medium transition-colors duration-200"
                   style={{
-                    background: page === pageNum ? 'var(--color-primary-500)' : 'transparent',
-                    color: page === pageNum ? 'white' : 'var(--text-secondary)',
+                    background: safePage === pageNum ? 'var(--color-primary-500)' : 'transparent',
+                    color: safePage === pageNum ? 'white' : 'var(--text-secondary)',
                   }}
                 >
                   {pageNum + 1}
                 </button>
-              );
-            })}
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={ChevronRight}
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={page === totalPages - 1}
-            />
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={ChevronRight}
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage === totalPages - 1}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

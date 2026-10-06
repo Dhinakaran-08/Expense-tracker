@@ -68,12 +68,17 @@ export default function TrendChart({ dailyTrend = [] }) {
         boxShadow: 'var(--shadow-sm)',
       }}
     >
-      <h3
-        className="text-base font-semibold mb-4"
-        style={{ color: 'var(--text-primary)' }}
-      >
-        Daily Expense Trend
-      </h3>
+      <div className="mb-4">
+        <h3
+          className="text-base font-semibold"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          Daily Expense Trend
+        </h3>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+          Daily spending this month (excl. rent)
+        </p>
+      </div>
       <ResponsiveContainer width="100%" height={280}>
         <AreaChart data={dailyTrend}>
           <defs>

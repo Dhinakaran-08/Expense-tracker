@@ -4,7 +4,32 @@ import Select from '../ui/Select';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../../lib/constants';
 
 export default function TransactionFilters({ filters, onChange }) {
-  const allCategories = [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES];
+  const categoryOptions =
+    filters.type === 'income'
+      ? INCOME_CATEGORIES
+      : filters.type === 'expense'
+      ? EXPENSE_CATEGORIES
+      : [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES];
+
+  const handleTypeChange = (e) => {
+    const newType = e.target.value;
+    const allowedCategories =
+      newType === 'income'
+        ? INCOME_CATEGORIES
+        : newType === 'expense'
+        ? EXPENSE_CATEGORIES
+        : [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES];
+
+    const newCategory = allowedCategories.includes(filters.category)
+      ? filters.category
+      : '';
+
+    onChange({
+      ...filters,
+      type: newType,
+      category: newCategory,
+    });
+  };
 
   return (
     <div className="flex flex-col sm:flex-row gap-3">
@@ -23,11 +48,11 @@ export default function TransactionFilters({ filters, onChange }) {
         ]}
         placeholder="All types"
         value={filters.type}
-        onChange={(e) => onChange({ ...filters, type: e.target.value })}
+        onChange={handleTypeChange}
         className="sm:w-40"
       />
       <Select
-        options={allCategories}
+        options={categoryOptions}
         placeholder="All categories"
         value={filters.category}
         onChange={(e) => onChange({ ...filters, category: e.target.value })}
