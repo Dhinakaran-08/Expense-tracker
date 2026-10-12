@@ -233,11 +233,10 @@ export function useAnalytics(transactions = []) {
     const avgDailySpend =
       currentDay > 0 ? nonDailyMonthExpense / currentDay : 0;
 
-    // Projected Monthly Expense:
-    // Takes all actual month expenses already recorded (including Rent, Allowance, and net Lend)
-    // plus the projected variable daily spending for the remaining days of the month.
-    const projectedRemainingDaily = avgDailySpend * daysRemaining;
-    const projectedMonthlyExpense = totalMonthExpense + projectedRemainingDaily;
+    // Projected Expense (excluding Rent, Lend, and Allowance):
+    // Extrapolates daily variable spending across the total days of the month.
+    const projectedMonthlyExpense =
+      currentDay > 0 ? (nonDailyMonthExpense / currentDay) * daysInMonth : 0;
 
     // Savings Rate (0% to 100%):
     // Based on true earned income vs net expenses. Clamped so it never goes negative.

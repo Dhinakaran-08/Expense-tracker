@@ -95,7 +95,7 @@ export default function RecentTransactions({ transactions = [] }) {
                   className="text-xs mt-0.5"
                   style={{ color: 'var(--text-tertiary)' }}
                 >
-                  {t.category} · {format(parseISO(t.date), 'dd MMM yyyy')}
+                  {t.category} · {format(parseISO(t.date), 'dd/MM/yyyy')}
                 </p>
               </div>
               <span

@@ -132,7 +132,7 @@ export default function TransactionList({
                       className="text-sm"
                       style={{ color: 'var(--text-secondary)' }}
                     >
-                      {format(parseISO(t.date), 'dd MMM yyyy')}
+                      {format(parseISO(t.date), 'dd/MM/yyyy')}
                     </span>
                   </td>
                   <td className="px-5 py-3.5">
@@ -234,7 +234,7 @@ export default function TransactionList({
                   {t.description || t.category}
                 </p>
                 <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                  {t.category} • {format(parseISO(t.date), 'dd MMM')}
+                  {t.category} • {format(parseISO(t.date), 'dd/MM/yyyy')}
                 </p>
               </div>
               <div className="text-right shrink-0">

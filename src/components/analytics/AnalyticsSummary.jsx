@@ -32,7 +32,7 @@ export default function AnalyticsSummary({ summary }) {
     {
       label: 'Projected Expense',
       value: `${CURRENCY}${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(summary.projectedMonthlyExpense || 0)}`,
-      sub: 'Estimated total by month end',
+      sub: 'By month end (excl. rent, lend & allowance)',
       icon: DollarSign,
       color: 'var(--color-accent-amber)',
       bg: 'var(--color-accent-amber-bg)',
