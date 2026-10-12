@@ -215,11 +215,12 @@ export function useAnalytics(transactions = []) {
     );
 
     const totalMonthIncome = currentMonthTransactions
-      .filter((t) => t.type === 'income')
+      .filter((t) => t.type === 'income' && t.category?.toLowerCase() !== 'receive lend')
       .reduce((s, t) => s + Number(t.amount), 0);
 
     const daysInMonth = endOfMonth(now).getDate();
     const currentDay = now.getDate();
+    const daysRemaining = Math.max(0, daysInMonth - currentDay);
 
     // Highest category excluding Rent, Lend, and Allowance
     const eligibleBreakdown = categoryBreakdown.filter(
@@ -229,27 +230,33 @@ export function useAnalytics(transactions = []) {
         c.category?.toLowerCase() !== 'allowance'
     );
 
-    const projectedNonDaily =
-      currentDay > 0 ? (nonDailyMonthExpense / currentDay) * daysInMonth : 0;
+    const avgDailySpend =
+      currentDay > 0 ? nonDailyMonthExpense / currentDay : 0;
+
+    // Projected Monthly Expense:
+    // Takes all actual month expenses already recorded (including Rent, Allowance, and net Lend)
+    // plus the projected variable daily spending for the remaining days of the month.
+    const projectedRemainingDaily = avgDailySpend * daysRemaining;
+    const projectedMonthlyExpense = totalMonthExpense + projectedRemainingDaily;
+
+    // Savings Rate (0% to 100%):
+    // Based on true earned income vs net expenses. Clamped so it never goes negative.
+    const savings = totalMonthIncome - totalMonthExpense;
+    const savingsRate =
+      totalMonthIncome > 0
+        ? Math.max(0, Math.min(100, (savings / totalMonthIncome) * 100)).toFixed(1)
+        : '0.0';
 
     return {
-      avgDailySpend:
-        currentDay > 0 ? nonDailyMonthExpense / currentDay : 0,
+      avgDailySpend,
       highestCategory: eligibleBreakdown[0]?.category || 'N/A',
       highestCategoryAmount: eligibleBreakdown[0]?.amount || 0,
-      savingsRate:
-        totalMonthIncome > 0
-          ? (
-              ((totalMonthIncome - totalMonthExpense) /
-                totalMonthIncome) *
-              100
-            ).toFixed(1)
-          : 0,
+      savingsRate,
       totalMonthIncome,
       totalMonthExpense,
       nonDailyMonthExpense,
       rentMonthExpense,
-      projectedMonthlyExpense: projectedNonDaily + rentMonthExpense,
+      projectedMonthlyExpense,
     };
   }, [currentMonthTransactions, categoryBreakdown]);
 

@@ -6,7 +6,7 @@ export default function AnalyticsSummary({ summary }) {
     {
       label: 'Avg Daily Spend',
       value: `${CURRENCY}${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(summary.avgDailySpend || 0)}`,
-      sub: 'Per day this month (excl. rent & allowance)',
+      sub: 'Per day this month (excl. rent, lend & allowance)',
       icon: Calendar,
       color: 'var(--color-primary-600)',
       bg: 'var(--color-primary-50)',
@@ -24,7 +24,7 @@ export default function AnalyticsSummary({ summary }) {
     {
       label: 'Savings Rate',
       value: `${summary.savingsRate || 0}%`,
-      sub: 'Of total monthly income',
+      sub: 'Of earned monthly income',
       icon: Percent,
       color: 'var(--color-success-500)',
       bg: 'var(--color-success-50)',
@@ -32,7 +32,7 @@ export default function AnalyticsSummary({ summary }) {
     {
       label: 'Projected Expense',
       value: `${CURRENCY}${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(summary.projectedMonthlyExpense || 0)}`,
-      sub: 'By month end (excl. allowance)',
+      sub: 'Estimated total by month end',
       icon: DollarSign,
       color: 'var(--color-accent-amber)',
       bg: 'var(--color-accent-amber-bg)',
