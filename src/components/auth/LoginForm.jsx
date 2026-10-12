@@ -32,7 +32,11 @@ export default function LoginForm() {
       await signIn(email.trim(), password);
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err.message || 'Failed to sign in');
+      if (err.message?.toLowerCase().includes('invalid login credentials')) {
+        setError('Invalid email or password. Please check your credentials or create an account first.');
+      } else {
+        setError(err.message || 'Failed to sign in');
+      }
     } finally {
       setLoading(false);
     }

@@ -37,7 +37,14 @@ export default function RegisterForm() {
       await signUp(email.trim(), password, fullName.trim());
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err.message || 'Failed to create account');
+      if (
+        err.message?.toLowerCase().includes('already exists') ||
+        err.message?.toLowerCase().includes('already registered')
+      ) {
+        setError('An account with this email already exists. Please sign in instead.');
+      } else {
+        setError(err.message || 'Failed to create account');
+      }
     } finally {
       setLoading(false);
     }

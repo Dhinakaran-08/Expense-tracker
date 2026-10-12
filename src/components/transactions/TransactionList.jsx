@@ -4,7 +4,7 @@ import {
   Edit3, Trash2, ChevronLeft, ChevronRight,
   Banknote, Wallet, UtensilsCrossed, ShoppingBasket, Home,
   ShoppingBag, Receipt, Gamepad2, HeartPulse, Plane, MoreHorizontal,
-  HandCoins,
+  HandCoins, Coins,
 } from 'lucide-react';
 import { CURRENCY, CATEGORY_COLORS } from '../../lib/constants';
 import Badge from '../ui/Badge';
@@ -18,6 +18,7 @@ const iconMap = {
   Grocery: ShoppingBasket,
   Rent: Home,
   Lend: HandCoins,
+  Allowance: Coins,
   Shopping: ShoppingBag,
   Bills: Receipt,
   Entertainment: Gamepad2,

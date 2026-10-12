@@ -98,50 +98,114 @@ export function useAnalytics(transactions = []) {
     return months;
   }, [analyticsTransactions]);
 
-  // Category breakdown (expenses only, excluding lend)
+  // Category breakdown (expenses, including net Lend if outstanding)
   const categoryBreakdown = useMemo(() => {
-    const expenses = currentMonthTransactions.filter(
-      (t) => t.type === 'expense'
-    );
-    const totalExpense = expenses.reduce(
-      (s, t) => s + Number(t.amount),
+    const start = startOfMonth(now);
+    const end = endOfMonth(now);
+
+    const monthTxns = transactions.filter((t) => {
+      try {
+        const d = parseISO(t.date);
+        return isWithinInterval(d, { start, end });
+      } catch {
+        return false;
+      }
+    });
+
+    const categoryMap = {};
+
+    // 1. Regular expenses (excluding Lend and Receive Lend)
+    monthTxns
+      .filter(
+        (t) =>
+          t.type === 'expense' &&
+          t.category?.toLowerCase() !== 'lend' &&
+          t.category?.toLowerCase() !== 'receive lend'
+      )
+      .forEach((t) => {
+        categoryMap[t.category] =
+          (categoryMap[t.category] || 0) + Number(t.amount);
+      });
+
+    // 2. Lend and Receive Lend calculations
+    const monthLend = monthTxns
+      .filter((t) => t.type === 'expense' && t.category?.toLowerCase() === 'lend')
+      .reduce((s, t) => s + Number(t.amount), 0);
+
+    const monthReceiveLend = monthTxns
+      .filter((t) => t.type === 'income' && t.category?.toLowerCase() === 'receive lend')
+      .reduce((s, t) => s + Number(t.amount), 0);
+
+    const totalAllLend = transactions
+      .filter((t) => t.type === 'expense' && t.category?.toLowerCase() === 'lend')
+      .reduce((s, t) => s + Number(t.amount), 0);
+
+    const totalAllReceiveLend = transactions
+      .filter((t) => t.type === 'income' && t.category?.toLowerCase() === 'receive lend')
+      .reduce((s, t) => s + Number(t.amount), 0);
+
+    const totalOutstandingLend = Math.max(0, totalAllLend - totalAllReceiveLend);
+
+    // Active net lend amount for this period
+    let netLendAmount = 0;
+    let receivedAmount = 0;
+
+    if (totalOutstandingLend > 0) {
+      if (monthLend > 0) {
+        netLendAmount = Math.min(
+          totalOutstandingLend,
+          Math.max(0, monthLend - monthReceiveLend)
+        );
+        receivedAmount = monthReceiveLend;
+      } else if (monthReceiveLend > 0) {
+        netLendAmount = totalOutstandingLend;
+        receivedAmount = monthReceiveLend;
+      }
+    }
+
+    // If fully received (netLendAmount <= 0), Lend category is deleted/omitted
+    if (netLendAmount > 0) {
+      categoryMap['Lend'] = netLendAmount;
+    }
+
+    const totalExpense = Object.values(categoryMap).reduce(
+      (s, amt) => s + Number(amt),
       0
     );
 
-    const categoryMap = {};
-    expenses.forEach((t) => {
-      categoryMap[t.category] =
-        (categoryMap[t.category] || 0) + Number(t.amount);
-    });
-
     return Object.entries(categoryMap)
+      .filter(([_, amount]) => amount > 0)
       .map(([category, amount]) => ({
         category,
         amount,
-        percentage: totalExpense > 0
-          ? ((amount / totalExpense) * 100).toFixed(1)
-          : 0,
+        percentage:
+          totalExpense > 0
+            ? ((amount / totalExpense) * 100).toFixed(1)
+            : 0,
       }))
       .sort((a, b) => b.amount - a.amount);
-  }, [currentMonthTransactions]);
+  }, [transactions]);
 
-  // Summary stats (excluding rent and lend from daily/projected calculations)
+  // Summary stats (excluding rent, lend, and allowance from daily/projected calculations)
   const summary = useMemo(() => {
     const monthExpenses = currentMonthTransactions.filter(
       (t) => t.type === 'expense'
     );
-    const nonRentMonthExpenses = monthExpenses.filter(
-      (t) => t.category?.toLowerCase() !== 'rent'
+    const nonDailyMonthExpenses = monthExpenses.filter(
+      (t) =>
+        t.category?.toLowerCase() !== 'rent' &&
+        t.category?.toLowerCase() !== 'lend' &&
+        t.category?.toLowerCase() !== 'allowance'
     );
     const rentMonthExpenses = monthExpenses.filter(
       (t) => t.category?.toLowerCase() === 'rent'
     );
 
-    const totalMonthExpense = monthExpenses.reduce(
-      (s, t) => s + Number(t.amount),
+    const totalMonthExpense = categoryBreakdown.reduce(
+      (s, item) => s + Number(item.amount),
       0
     );
-    const nonRentMonthExpense = nonRentMonthExpenses.reduce(
+    const nonDailyMonthExpense = nonDailyMonthExpenses.reduce(
       (s, t) => s + Number(t.amount),
       0
     );
@@ -157,19 +221,22 @@ export function useAnalytics(transactions = []) {
     const daysInMonth = endOfMonth(now).getDate();
     const currentDay = now.getDate();
 
-    // Highest category excluding Rent (and Lend is already excluded)
-    const nonRentBreakdown = categoryBreakdown.filter(
-      (c) => c.category?.toLowerCase() !== 'rent'
+    // Highest category excluding Rent, Lend, and Allowance
+    const eligibleBreakdown = categoryBreakdown.filter(
+      (c) =>
+        c.category?.toLowerCase() !== 'rent' &&
+        c.category?.toLowerCase() !== 'lend' &&
+        c.category?.toLowerCase() !== 'allowance'
     );
 
-    const projectedNonRent =
-      currentDay > 0 ? (nonRentMonthExpense / currentDay) * daysInMonth : 0;
+    const projectedNonDaily =
+      currentDay > 0 ? (nonDailyMonthExpense / currentDay) * daysInMonth : 0;
 
     return {
       avgDailySpend:
-        currentDay > 0 ? nonRentMonthExpense / currentDay : 0,
-      highestCategory: nonRentBreakdown[0]?.category || 'N/A',
-      highestCategoryAmount: nonRentBreakdown[0]?.amount || 0,
+        currentDay > 0 ? nonDailyMonthExpense / currentDay : 0,
+      highestCategory: eligibleBreakdown[0]?.category || 'N/A',
+      highestCategoryAmount: eligibleBreakdown[0]?.amount || 0,
       savingsRate:
         totalMonthIncome > 0
           ? (
@@ -180,13 +247,13 @@ export function useAnalytics(transactions = []) {
           : 0,
       totalMonthIncome,
       totalMonthExpense,
-      nonRentMonthExpense,
+      nonDailyMonthExpense,
       rentMonthExpense,
-      projectedMonthlyExpense: projectedNonRent + rentMonthExpense,
+      projectedMonthlyExpense: projectedNonDaily + rentMonthExpense,
     };
   }, [currentMonthTransactions, categoryBreakdown]);
 
-  // Daily spending trend for current month (excluding rent and lend)
+  // Daily spending trend for current month (excluding rent, lend, and allowance)
   const dailyTrend = useMemo(() => {
     const start = startOfMonth(now);
     const end = now;
@@ -199,7 +266,8 @@ export function useAnalytics(transactions = []) {
           (t) =>
             t.date === dateStr &&
             t.type === 'expense' &&
-            t.category?.toLowerCase() !== 'rent'
+            t.category?.toLowerCase() !== 'rent' &&
+            t.category?.toLowerCase() !== 'allowance'
         )
         .reduce((s, t) => s + Number(t.amount), 0);
 

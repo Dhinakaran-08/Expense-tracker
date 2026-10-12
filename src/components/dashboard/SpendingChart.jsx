@@ -43,22 +43,67 @@ export default function SpendingChart({ transactions = [], categoryBreakdown: de
     const start = startOfMonth(selectedDate);
     const end = endOfMonth(selectedDate);
 
-    const monthExpenses = transactions.filter((t) => {
-      if (t.type !== 'expense') return false;
-      const cat = t.category?.toLowerCase();
-      if (cat === 'lend' || cat === 'receive lend') return false;
-      const d = parseISO(t.date);
-      return isWithinInterval(d, { start, end });
+    const monthTxns = transactions.filter((t) => {
+      try {
+        const d = parseISO(t.date);
+        return isWithinInterval(d, { start, end });
+      } catch {
+        return false;
+      }
     });
-
-    const totalExpense = monthExpenses.reduce((s, t) => s + Number(t.amount), 0);
 
     const categoryMap = {};
-    monthExpenses.forEach((t) => {
-      categoryMap[t.category] = (categoryMap[t.category] || 0) + Number(t.amount);
-    });
+
+    monthTxns
+      .filter(
+        (t) =>
+          t.type === 'expense' &&
+          t.category?.toLowerCase() !== 'lend' &&
+          t.category?.toLowerCase() !== 'receive lend' &&
+          t.category?.toLowerCase() !== 'allowance'
+      )
+      .forEach((t) => {
+        categoryMap[t.category] = (categoryMap[t.category] || 0) + Number(t.amount);
+      });
+
+    const monthLend = monthTxns
+      .filter((t) => t.type === 'expense' && t.category?.toLowerCase() === 'lend')
+      .reduce((s, t) => s + Number(t.amount), 0);
+
+    const monthReceiveLend = monthTxns
+      .filter((t) => t.type === 'income' && t.category?.toLowerCase() === 'receive lend')
+      .reduce((s, t) => s + Number(t.amount), 0);
+
+    const totalAllLend = transactions
+      .filter((t) => t.type === 'expense' && t.category?.toLowerCase() === 'lend')
+      .reduce((s, t) => s + Number(t.amount), 0);
+
+    const totalAllReceiveLend = transactions
+      .filter((t) => t.type === 'income' && t.category?.toLowerCase() === 'receive lend')
+      .reduce((s, t) => s + Number(t.amount), 0);
+
+    const totalOutstandingLend = Math.max(0, totalAllLend - totalAllReceiveLend);
+
+    let netLendAmount = 0;
+    if (totalOutstandingLend > 0) {
+      if (monthLend > 0) {
+        netLendAmount = Math.min(
+          totalOutstandingLend,
+          Math.max(0, monthLend - monthReceiveLend)
+        );
+      } else if (monthReceiveLend > 0) {
+        netLendAmount = totalOutstandingLend;
+      }
+    }
+
+    if (netLendAmount > 0) {
+      categoryMap['Lend'] = netLendAmount;
+    }
+
+    const totalExpense = Object.values(categoryMap).reduce((s, t) => s + Number(t), 0);
 
     return Object.entries(categoryMap)
+      .filter(([_, amount]) => amount > 0)
       .map(([category, amount]) => ({
         category,
         amount,
@@ -113,7 +158,7 @@ export default function SpendingChart({ transactions = [], categoryBreakdown: de
             className="text-xs font-semibold px-2 py-1 rounded-md"
             style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
           >
-            {monthOffset === 0 ? 'Current' : `-${monthOffset}m`}
+            {monthOffset === 0 ? 'Current' : `${monthOffset}m`}
           </span>
           <button
             onClick={() => setMonthOffset((prev) => Math.max(0, prev - 1))}

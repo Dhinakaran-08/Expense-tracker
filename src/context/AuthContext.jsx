@@ -2,40 +2,76 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const AuthContext = createContext(null);
+const LOCAL_SESSION_KEY = 'expense-tracker-local-session';
+const LOCAL_USERS_KEY = 'expense-tracker-local-users';
+
+// Helper to check if an error is a low-level network failure (e.g. ad-blocker, offline, DNS drop)
+const isNetworkOrFetchError = (err) => {
+  if (!err) return false;
+  // If Supabase returned an HTTP status (e.g. 400 invalid credentials, 422, etc.), it is NOT a network failure
+  if (err.status && err.status >= 400 && err.status < 500) {
+    return false;
+  }
+  const msg = (err.message || '').toLowerCase();
+  return (
+    err.name === 'TypeError' ||
+    msg.includes('failed to fetch') ||
+    msg.includes('fetch failed') ||
+    msg.includes('networkerror') ||
+    msg.includes('network request failed') ||
+    msg.includes('err_blocked_by_client')
+  );
+};
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isDemo, setIsDemo] = useState(false); // Renamed internally to mean "local mode"
+  const [isDemo, setIsDemo] = useState(false);
 
-  const fetchProfile = async (userId) => {
-    if (!isSupabaseConfigured) return;
+  const fetchProfile = async (userId, userMetadata = {}) => {
+    if (!isSupabaseConfigured || !userId) return;
     try {
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
+
+      // If the trigger hasn't populated a profile row yet, auto-upsert a default one
+      if (!data && !error) {
+        const initialProfile = {
+          id: userId,
+          full_name: userMetadata?.full_name || '',
+          currency: '₹',
+        };
+        const { data: inserted } = await supabase
+          .from('profiles')
+          .upsert(initialProfile)
+          .select()
+          .maybeSingle();
+        data = inserted || initialProfile;
+      }
+
       if (data) setProfile(data);
-    } catch {
-      // Ignore
+    } catch (err) {
+      console.warn('Profile fetch error:', err);
     }
   };
 
   useEffect(() => {
-    const savedSession = localStorage.getItem('expense-tracker-local-session');
+    const savedSession = localStorage.getItem(LOCAL_SESSION_KEY);
     let savedLocal = null;
     if (savedSession) {
       try {
         savedLocal = JSON.parse(savedSession);
       } catch {
-        localStorage.removeItem('expense-tracker-local-session');
+        localStorage.removeItem(LOCAL_SESSION_KEY);
       }
     }
 
     if (!isSupabaseConfigured) {
-      // No real backend available — the only valid session is a local one.
+      // Offline / Local Mode: Only load saved local session if present
       if (savedLocal) {
         setUser(savedLocal.user);
         setProfile(savedLocal.profile);
@@ -45,17 +81,14 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // Supabase IS configured — a real session always takes priority over
-    // any leftover local/guest session, and we must always listen for
-    // auth changes so signIn/signUp are reflected immediately.
+    // Supabase Mode
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
         setIsDemo(false);
-        fetchProfile(session.user.id);
+        fetchProfile(session.user.id, session.user.user_metadata);
       } else if (savedLocal?.isDemo) {
-        // No real session, but the person previously chose "continue as
-        // guest" — honor that until they explicitly sign in/out.
+        // Only honor guest mode if specifically clicked "continue as guest"
         setUser(savedLocal.user);
         setProfile(savedLocal.profile);
         setIsDemo(true);
@@ -66,12 +99,17 @@ export function AuthProvider({ children }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         if (session?.user) {
           setIsDemo(false);
-          localStorage.removeItem('expense-tracker-local-session');
+          localStorage.removeItem(LOCAL_SESSION_KEY);
           setUser(session.user);
-          await fetchProfile(session.user.id);
+          await fetchProfile(session.user.id, session.user.user_metadata);
+        } else if (event === 'SIGNED_OUT') {
+          localStorage.removeItem(LOCAL_SESSION_KEY);
+          setUser(null);
+          setProfile(null);
+          setIsDemo(false);
         }
         setLoading(false);
       }
@@ -80,123 +118,149 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Helper to register a local user account (offline/fallback mode)
+  const registerLocalUser = (cleanEmail, password, fullName) => {
+    let users = [];
+    try {
+      users = JSON.parse(localStorage.getItem(LOCAL_USERS_KEY) || '[]');
+    } catch {
+      users = [];
+    }
+
+    if (users.some((u) => u.email === cleanEmail)) {
+      throw new Error('An account with this email already exists.');
+    }
+
+    const localUser = {
+      id: 'local-' + Date.now(),
+      email: cleanEmail,
+      password, // Saved in localStorage to verify on subsequent logins
+      user_metadata: { full_name: fullName },
+    };
+    const localProfile = {
+      id: localUser.id,
+      full_name: fullName,
+      currency: '₹',
+    };
+
+    users.push(localUser);
+    localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
+
+    setUser(localUser);
+    setProfile(localProfile);
+    setIsDemo(true);
+    localStorage.setItem(
+      LOCAL_SESSION_KEY,
+      JSON.stringify({ user: localUser, profile: localProfile, isDemo: true })
+    );
+    return { user: localUser, isLocal: true };
+  };
+
+  // Helper to authenticate a local user account (offline/fallback mode)
+  const loginLocalUser = (cleanEmail, password) => {
+    let users = [];
+    try {
+      users = JSON.parse(localStorage.getItem(LOCAL_USERS_KEY) || '[]');
+    } catch {
+      users = [];
+    }
+
+    const existingUser = users.find((u) => u.email === cleanEmail);
+    if (!existingUser) {
+      throw new Error('No account found with this email. Please create an account first.');
+    }
+
+    if (existingUser.password !== password) {
+      throw new Error('Invalid email or password.');
+    }
+
+    const localProfile = {
+      id: existingUser.id,
+      full_name: existingUser.user_metadata?.full_name || cleanEmail.split('@')[0],
+      currency: '₹',
+    };
+
+    setUser(existingUser);
+    setProfile(localProfile);
+    setIsDemo(true);
+    localStorage.setItem(
+      LOCAL_SESSION_KEY,
+      JSON.stringify({ user: existingUser, profile: localProfile, isDemo: true })
+    );
+    return { user: existingUser, isLocal: true };
+  };
+
   const signUp = async (email, password, fullName) => {
+    const cleanEmail = email.trim().toLowerCase();
+
     if (!isSupabaseConfigured) {
-      const localUser = {
-        id: 'local-' + Date.now(),
-        email,
-        user_metadata: { full_name: fullName },
-      };
-      const localProfile = {
-        id: localUser.id,
-        full_name: fullName,
-        currency: '₹',
-      };
-      setUser(localUser);
-      setProfile(localProfile);
-      setIsDemo(true);
-      localStorage.setItem(
-        'expense-tracker-local-session',
-        JSON.stringify({ user: localUser, profile: localProfile, isDemo: true })
-      );
-      return { user: localUser };
+      return registerLocalUser(cleanEmail, password, fullName);
     }
 
     try {
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: cleanEmail,
         password,
         options: { data: { full_name: fullName } },
       });
-      if (error) throw error;
+
+      if (error) {
+        throw error;
+      }
+
       if (data?.user) {
-        localStorage.removeItem('expense-tracker-local-session');
+        localStorage.removeItem(LOCAL_SESSION_KEY);
         setUser(data.user);
         setIsDemo(false);
-        await fetchProfile(data.user.id);
+        await fetchProfile(data.user.id, { full_name: fullName });
       }
+
       return data;
     } catch (err) {
-      if (err.message?.includes('fetch') || err.message?.includes('API key') || err.status === 400) {
-        const localUser = {
-          id: 'local-' + Date.now(),
-          email,
-          user_metadata: { full_name: fullName },
-        };
-        const localProfile = {
-          id: localUser.id,
-          full_name: fullName,
-          currency: '₹',
-        };
-        setUser(localUser);
-        setProfile(localProfile);
-        setIsDemo(true);
-        localStorage.setItem(
-          'expense-tracker-local-session',
-          JSON.stringify({ user: localUser, profile: localProfile, isDemo: true })
-        );
-        return { user: localUser };
+      // If it is a real network/ad-blocker failure ('Failed to fetch'):
+      // Register in local verified mode so the user isn't stuck.
+      if (isNetworkOrFetchError(err)) {
+        console.warn('Supabase cloud unreachable (Failed to fetch). Registering account in local mode:', err);
+        return registerLocalUser(cleanEmail, password, fullName);
       }
+      // Otherwise (duplicate email, weak password, etc.), throw the actual error!
       throw err;
     }
   };
 
   const signIn = async (email, password) => {
+    const cleanEmail = email.trim().toLowerCase();
+
     if (!isSupabaseConfigured) {
-      const localUser = {
-        id: 'local-user',
-        email,
-        user_metadata: { full_name: email.split('@')[0] },
-      };
-      const localProfile = {
-        id: 'local-user',
-        full_name: email.split('@')[0],
-        currency: '₹',
-      };
-      setUser(localUser);
-      setProfile(localProfile);
-      setIsDemo(true);
-      localStorage.setItem(
-        'expense-tracker-local-session',
-        JSON.stringify({ user: localUser, profile: localProfile, isDemo: true })
-      );
-      return { user: localUser };
+      return loginLocalUser(cleanEmail, password);
     }
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: cleanEmail,
         password,
       });
-      if (error) throw error;
+
+      if (error) {
+        throw error;
+      }
+
       if (data?.user) {
-        localStorage.removeItem('expense-tracker-local-session');
+        localStorage.removeItem(LOCAL_SESSION_KEY);
         setUser(data.user);
         setIsDemo(false);
-        await fetchProfile(data.user.id);
+        await fetchProfile(data.user.id, data.user.user_metadata);
       }
+
       return data;
     } catch (err) {
-      if (err.message?.includes('fetch') || err.message?.includes('API key') || err.status === 400) {
-        const localUser = {
-          id: 'local-user',
-          email,
-          user_metadata: { full_name: email.split('@')[0] },
-        };
-        const localProfile = {
-          id: 'local-user',
-          full_name: email.split('@')[0],
-          currency: '₹',
-        };
-        setUser(localUser);
-        setProfile(localProfile);
-        setIsDemo(true);
-        localStorage.setItem(
-          'expense-tracker-local-session',
-          JSON.stringify({ user: localUser, profile: localProfile, isDemo: true })
-        );
-        return { user: localUser };
+      // If it is a real network/ad-blocker failure:
+      // Try to verify against local registered users
+      if (isNetworkOrFetchError(err)) {
+        console.warn('Supabase cloud unreachable. Attempting login via local mode:', err);
+        return loginLocalUser(cleanEmail, password);
       }
+      // If it is an auth error (wrong password, account not found), throw it!
       throw err;
     }
   };
@@ -216,7 +280,7 @@ export function AuthProvider({ children }) {
     setProfile(localProfile);
     setIsDemo(true);
     localStorage.setItem(
-      'expense-tracker-local-session',
+      LOCAL_SESSION_KEY,
       JSON.stringify({ user: localUser, profile: localProfile, isDemo: true })
     );
   };
@@ -225,10 +289,7 @@ export function AuthProvider({ children }) {
     if (isSupabaseConfigured && !isDemo) {
       await supabase.auth.signOut().catch(() => {});
     }
-    localStorage.removeItem('expense-tracker-local-session');
-    // Clear local data so a fresh start happens next time
-    localStorage.removeItem('expense_iq_transactions');
-    localStorage.removeItem('expense_iq_budgets');
+    localStorage.removeItem(LOCAL_SESSION_KEY);
     setUser(null);
     setProfile(null);
     setIsDemo(false);
@@ -238,26 +299,26 @@ export function AuthProvider({ children }) {
     setProfile((prev) => {
       const nextProfile = { ...prev, ...updates };
       if (!isSupabaseConfigured || isDemo) {
-        const saved = localStorage.getItem('expense-tracker-local-session');
+        const saved = localStorage.getItem(LOCAL_SESSION_KEY);
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
             localStorage.setItem(
-              'expense-tracker-local-session',
+              LOCAL_SESSION_KEY,
               JSON.stringify({ ...parsed, profile: nextProfile })
             );
           } catch {
-            // Ignore malformed session, state update still applies
+            // Ignore malformed session
           }
         }
       }
       return nextProfile;
     });
+
     if (isSupabaseConfigured && !isDemo && user) {
       const { data } = await supabase
         .from('profiles')
-        .update(updates)
-        .eq('id', user.id)
+        .upsert({ id: user.id, ...updates })
         .select()
         .single();
       if (data) setProfile(data);
@@ -273,7 +334,7 @@ export function AuthProvider({ children }) {
     signUp,
     signIn,
     signOut,
-    enableDemoMode, // Used as 'continue as guest'
+    enableDemoMode,
     updateProfile,
   };
 

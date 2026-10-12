@@ -2,7 +2,7 @@ import { format, parseISO } from 'date-fns';
 import {
   Banknote, Wallet, UtensilsCrossed, ShoppingBasket, Home,
   ShoppingBag, Receipt, Gamepad2, HeartPulse, Plane, MoreHorizontal,
-  HandCoins,
+  HandCoins, Coins,
   ArrowUpRight, ArrowDownRight,
 } from 'lucide-react';
 import { CURRENCY, CATEGORY_COLORS } from '../../lib/constants';
@@ -15,6 +15,7 @@ const iconMap = {
   Grocery: ShoppingBasket,
   Rent: Home,
   Lend: HandCoins,
+  Allowance: Coins,
   Shopping: ShoppingBag,
   Bills: Receipt,
   Entertainment: Gamepad2,
