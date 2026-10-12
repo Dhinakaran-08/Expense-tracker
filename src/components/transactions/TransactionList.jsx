@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
+import { formatIndianDate } from '../../lib/dateUtils';
 import {
   Edit3, Trash2, ChevronLeft, ChevronRight,
   Banknote, Wallet, UtensilsCrossed, ShoppingBasket, Home,
@@ -132,7 +132,7 @@ export default function TransactionList({
                       className="text-sm"
                       style={{ color: 'var(--text-secondary)' }}
                     >
-                      {format(parseISO(t.date), 'dd/MM/yyyy')}
+                      {formatIndianDate(t.date)}
                     </span>
                   </td>
                   <td className="px-5 py-3.5">
@@ -234,7 +234,7 @@ export default function TransactionList({
                   {t.description || t.category}
                 </p>
                 <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                  {t.category} • {format(parseISO(t.date), 'dd/MM/yyyy')}
+                  {t.category} • {formatIndianDate(t.date)}
                 </p>
               </div>
               <div className="text-right shrink-0">

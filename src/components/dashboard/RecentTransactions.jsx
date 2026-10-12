@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns';
+import { formatIndianDate } from '../../lib/dateUtils';
 import {
   Banknote, Wallet, UtensilsCrossed, ShoppingBasket, Home,
   ShoppingBag, Receipt, Gamepad2, HeartPulse, Plane, MoreHorizontal,
@@ -95,7 +95,7 @@ export default function RecentTransactions({ transactions = [] }) {
                   className="text-xs mt-0.5"
                   style={{ color: 'var(--text-tertiary)' }}
                 >
-                  {t.category} · {format(parseISO(t.date), 'dd/MM/yyyy')}
+                  {t.category} · {formatIndianDate(t.date)}
                 </p>
               </div>
               <span

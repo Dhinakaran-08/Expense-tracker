@@ -1,7 +1,8 @@
 import { FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { formatIndianDate } from '../../lib/dateUtils';
 import Button from '../ui/Button';
 
 export default function ExportButtons({ transactions = [], profile = {} }) {
@@ -41,7 +42,7 @@ export default function ExportButtons({ transactions = [], profile = {} }) {
 
     // Table
     const tableRows = transactions.map((t) => [
-      format(parseISO(t.date), 'dd/MM/yyyy'),
+      formatIndianDate(t.date),
       t.type.toUpperCase(),
       t.category,
       `Rs. ${Number(t.amount).toLocaleString('en-IN')}`,

@@ -38,6 +38,7 @@ const Input = forwardRef(function Input(
               ? '1px solid var(--color-danger-500)'
               : '1px solid var(--border-color)',
           }}
+          lang={props.lang || (props.type === 'date' ? 'en-IN' : undefined)}
           {...props}
         />
       </div>
